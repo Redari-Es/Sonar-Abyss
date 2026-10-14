@@ -1,21 +1,30 @@
 package main
 
-import "math/rand"
+import (
+	"math"
+	"math/rand"
+)
 
 const (
 	tileSize = 16
 	mapW     = 60
 	mapH     = 40
 	screenW  = mapW * tileSize //960
-	screenH  = mapH * tileSize
-	maxDist  = 20
+	screenH  = mapH * tileSize //640
+	maxDist  = 20              //玩家脉冲传播距离
+	maxFloor = 5               // 逃到第五层出口即胜利
 )
 
 var dirs4 = [4][2]int{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
 
 type World struct {
-	walls [mapW][mapH]bool
-	light [mapW][mapH]float32
+	walls    [mapW][mapH]bool
+	light    [mapW][mapH]float32
+	crystals [mapW][mapH]bool //氧气水晶
+	exitX    int
+	exitY    int
+	spawnX   float32
+	spawnY   float32
 
 	// BFS 声呐波传播
 	dist     [mapW][mapH]int
@@ -25,7 +34,7 @@ type World struct {
 	pulseMax int
 }
 
-func newWorld() *World {
+func newWorld(floor int) *World {
 	w := &World{}
 	// 元胞自动机生成洞穴
 	for x := 0; x < mapW; x++ {
@@ -61,7 +70,54 @@ func newWorld() *World {
 		}
 		w.walls = ng
 	}
+	// M3:
+	w.findSpawn()
+	n := 4 + floor
+	for n > 0 {
+		x := 1 + rand.Intn(mapW-2)
+		y := 1 + rand.Intn(mapH-2)
+		if w.walls[x][y] || w.crystals[x][y] {
+			continue
+		}
+		if tileDist(x, y, int(w.spawnX)/tileSize, int(w.spawnY)/tileSize) < 8 {
+			continue
+		}
+		w.crystals[x][y] = true
+		n--
+	}
+	// 放置出口
+	for tries := 0; tries < 500; tries++ {
+		x := 1 + rand.Intn(mapW-2)
+		y := 1 + rand.Intn(mapH-2)
+		if w.walls[x][y] || w.crystals[x][y] {
+			continue
+		}
+		d := tileDist(x, y, int(w.spawnX)/tileSize, int(w.spawnY)/tileSize)
+		if d >= 20 || (tries > 300 && d >= 12) {
+			w.exitX, w.exitY = x, y
+			break
+		}
+	}
 	return w
+}
+
+func tileDist(ax, ay, bx, by int) float64 {
+	dx, dy := float64(ax-bx), float64(ay-by)
+	return math.Sqrt(dx*dx + dy*dy)
+}
+
+func (w *World) findSpawn() {
+	for r := 0; r < 30; r++ {
+		for x := mapW/2 - r; x <= mapW/2+r; x++ {
+			for y := mapH/2 - r; y <= mapH/2+r; y++ {
+				if w.inBounds(x, y) && !w.walls[x][y] {
+					w.spawnX = float32(x*tileSize + 2)
+					w.spawnY = float32(y*tileSize + 2)
+					return
+				}
+			}
+		}
+	}
 }
 
 func (w *World) inBounds(x, y int) bool {
@@ -137,6 +193,17 @@ func (w *World) collide(px, py float32) bool {
 	return false
 }
 
+// 拾取水晶
+func (w *World) takeCrystalAt(px, py float32) bool {
+	tx, ty := int((px+6)/tileSize), int((py+6)/tileSize)
+	if w.crystals[tx][ty] {
+		w.crystals[tx][ty] = false
+		return true
+	}
+	return false
+}
+
+/*
 func (w *World) findSpawn(px, py *float32) {
 	for r := 0; r < 30; r++ {
 		for x := mapW/2 - r; x <= mapW/2+r; x++ {
@@ -149,6 +216,12 @@ func (w *World) findSpawn(px, py *float32) {
 			}
 		}
 	}
+}
+*/
+
+func (w *World) atExit(px, py float32) bool {
+	tx, ty := int((px+6)/tileSize), int((py+6)/tileSize)
+	return tx == w.exitX && ty == w.exitY
 }
 
 func (w *World) randomOpenTileFarFrom(px, py float32, minTiles int) (float32, float32) {

@@ -18,7 +18,9 @@ const (
 )
 
 type Monster struct {
-	x, y   float32
+	x, y  float32
+	speed float32
+
 	field  [mapW][mapH]int // 寻路场
 	repath int
 
@@ -32,9 +34,9 @@ type Monster struct {
 	pingIn int //距离下次发射自身脉冲tick数
 }
 
-func newMonster(x, y float32) *Monster {
+func newMonster(x, y, speed float32) *Monster {
 	return &Monster{
-		x: x, y: y, wX: x, wY: y,
+		x: x, y: y, wX: x, wY: y, speed: speed,
 		pingIn: 180 + rand.Intn(240),
 	}
 }
@@ -69,21 +71,21 @@ func (m *Monster) update(w *World, px, py float32) {
 	} else if m.state == StateChase && d > 9 {
 		m.state = StateInvestigate
 	}
-	speed := float32(1.5) //比玩家2.5慢，给逃脱空间
+	//	speed := float32(1.5) //比玩家2.5慢，给逃脱空间
 	switch m.state {
 	case StateChase:
 		m.tgtX, m.tgtY, m.hasTarget = ptx, pty, true
 		if m.repath > 10 {
 			m.repath = 10 //追击时寻路场刷新更勤
 		}
-		m.moveByField(w, speed)
+		m.moveByField(w, m.speed)
 	case StateInvestigate:
-		if !m.moveByField(w, speed*0.8) {
+		if !m.moveByField(w, m.speed*0.8) {
 			m.state = StateWander
 			m.hasTarget = false
 		}
 	default:
-		m.wander(w, speed*0.5)
+		m.wander(w, m.speed*0.5)
 	}
 	if m.repath > 0 {
 		m.repath--
@@ -124,6 +126,7 @@ func (m *Monster) moveByField(w *World, speed float32) bool {
 	return true
 }
 
+/*
 func (m *Monster) moveToward(cx, cy, speed float32) {
 	dx, dy := cx-m.x, cy-m.y
 	d := float32(math.Hypot(float64(dx), float64(dy)))
@@ -134,6 +137,7 @@ func (m *Monster) moveToward(cx, cy, speed float32) {
 	m.x += dx / d * speed
 	m.y += dy / d * speed
 }
+*/
 
 func (m *Monster) wander(w *World, speed float32) {
 	m.wTimer--
@@ -155,6 +159,14 @@ func (m *Monster) wander(w *World, speed float32) {
 		}
 	}
 	m.moveToward(m.wX, m.wY, speed)
+}
+func (m *Monster) moveToward(cx, cy, speed float32) {
+	dx, dy := cx-m.x, cy-m.y
+	d := float32(math.Hypot(float64(dx), float64(dy)))
+	if d <= speed {
+		m.x, m.y = cx, cy
+		return
+	}
 }
 
 func (m *Monster) draw(screen *ebiten.Image, w *World) {

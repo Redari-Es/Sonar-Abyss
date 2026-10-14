@@ -13,24 +13,40 @@ import (
 const sampleRate = 22050
 
 type SoundBoard struct {
-	ctx   *audio.Context
-	ping  *audio.Player // 玩家脉冲：高频扫频
-	mPing *audio.Player // 怪物脉冲：低频扫频
-	step  *audio.Player // 脚步
-	alert *audio.Player //怪物警觉低吼
-	death *audio.Player // 死亡
+	ctx     *audio.Context
+	ping    *audio.Player // 玩家脉冲：高频扫频
+	mPing   *audio.Player // 怪物脉冲：低频扫频
+	step    *audio.Player // 脚步
+	alert   *audio.Player //怪物警觉低吼
+	death   *audio.Player // 死亡
+	pickup  *audio.Player
+	descend *audio.Player
+	heart   *audio.Player
 }
 
 func newSoundBoard() *SoundBoard {
 	ctx := audio.NewContext(sampleRate)
 	return &SoundBoard{
-		ctx:   ctx,
-		ping:  mustPlayer(ctx, chirp(900, 430, 0.28, 9)),
-		mPing: mustPlayer(ctx, chirp(330, 170, 0.4, 7)),
-		step:  mustPlayer(ctx, thump()),
-		alert: mustPlayer(ctx, growl()),
-		death: mustPlayer(ctx, chirp(420, 55, 0.7, 3)),
+		ctx:     ctx,
+		ping:    mustPlayer(ctx, chirp(900, 430, 0.28, 9)),
+		mPing:   mustPlayer(ctx, chirp(330, 170, 0.4, 7)),
+		step:    mustPlayer(ctx, thump()),
+		alert:   mustPlayer(ctx, growl()),
+		death:   mustPlayer(ctx, chirp(420, 55, 0.7, 3)),
+		pickup:  mustPlayer(ctx, chirp(1250, 1900, 0.14, 12)),
+		descend: mustPlayer(ctx, chirp(320, 50, 0.9, 2.5)),
+		heart:   mustPlayer(ctx, heartBeat()),
 	}
+}
+func heartBeat() []float64 {
+	n := int(0.5 * sampleRate)
+	out := make([]float64, n)
+	for i := range out {
+		t := float64(i) / sampleRate
+		env := math.Exp(-math.Mod(t, 0.22) * 60)
+		out[i] = 0.5 * env * math.Sin(2*math.Pi*60*t)
+	}
+	return out
 }
 
 func mustPlayer(ctx *audio.Context, samples []float64) *audio.Player {
